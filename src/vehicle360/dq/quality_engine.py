@@ -82,24 +82,60 @@ class DataQualityEngine:
             return []
 
     def _result(self, audit_id, workflow_audit_id, batch_id, pipeline_id, rule, evaluated, passed, failed):
-        row = [{
-            "dq_result_id": str(uuid4()),
-            "audit_id": audit_id,
-            "workflow_audit_id": workflow_audit_id,
-            "batch_id": batch_id,
-            "pipeline_id": pipeline_id,
-            "rule_id": rule["rule_id"],
-            "rule_name": rule["rule_name"],
-            "rule_type": rule["rule_type"],
-            "severity": rule["severity"],
-            "evaluated_row_count": int(evaluated),
-            "failed_row_count": int(failed),
-            "passed_row_count": int(passed),
-            "failure_percentage": float((failed / evaluated * 100) if evaluated else 0),
-            "threshold_value": rule["threshold_value"],
-            "rule_status": "FAILED" if failed else "PASSED",
-            "failure_action": rule["failure_action"],
-            "evaluated_timestamp": None,
-            "sample_failed_records": None,
-        }]
-        self.spark.createDataFrame(row).write.format("delta").mode("append").saveAsTable(self.results_table)
+        from uuid import uuid4
+    
+        def q(value):
+            if value is None:
+                return "NULL"
+            if isinstance(value, bool):
+                return "true" if value else "false"
+            if isinstance(value, (int, float)):
+                return str(value)
+            s = str(value).replace("'", "''")
+            return f"'{s}'"
+    
+        failure_percentage = float((failed / evaluated * 100) if evaluated else 0)
+    
+        self.spark.sql(f"""
+            INSERT INTO {self.results_table} (
+                dq_result_id,
+                audit_id,
+                workflow_audit_id,
+                batch_id,
+                pipeline_id,
+                rule_id,
+                rule_name,
+                rule_type,
+                severity,
+                evaluated_row_count,
+                failed_row_count,
+                passed_row_count,
+                failure_percentage,
+                threshold_value,
+                rule_status,
+                failure_action,
+                evaluated_timestamp,
+                sample_failed_records
+            )
+            VALUES (
+                {q(str(uuid4()))},
+                {q(audit_id)},
+                {q(workflow_audit_id)},
+                {q(batch_id)},
+                {q(pipeline_id)},
+                {q(rule["rule_id"])},
+                {q(rule["rule_name"])},
+                {q(rule["rule_type"])},
+                {q(rule["severity"])},
+                {int(evaluated)},
+                {int(failed)},
+                {int(passed)},
+                {failure_percentage},
+                {q(rule["threshold_value"])},
+                {q("FAILED" if failed else "PASSED")},
+                {q(rule["failure_action"])},
+                current_timestamp(),
+                NULL
+            )
+        """)
+    
