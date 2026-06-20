@@ -43,51 +43,94 @@ class PipelineAuditManager:
     def __post_init__(self) -> None:
         self.audit_id = self.audit_id or str(uuid4())
 
-    def start(self, source_object: str, target_object: str, load_type: str) -> str:
-        self.started_at = utc_now()
-        row = [{
-            "audit_id": self.audit_id,
-            "workflow_audit_id": self.workflow_audit_id,
-            "batch_id": self.batch_id,
-            "pipeline_id": self.pipeline_id,
-            "pipeline_name": self.pipeline_name,
-            "pipeline_group": self.pipeline_group,
-            "source_object": source_object,
-            "target_object": target_object,
-            "load_type": load_type,
-            "run_status": "RUNNING",
-            "start_timestamp": self.started_at,
-            "end_timestamp": None,
-            "duration_seconds": None,
-            "rows_read": 0,
-            "rows_written": 0,
-            "rows_inserted": 0,
-            "rows_updated": 0,
-            "rows_deleted": 0,
-            "rows_rejected": 0,
-            "rows_duplicated": 0,
-            "rows_quarantined": 0,
-            "source_watermark": None,
-            "target_watermark": None,
-            "source_file_name": None,
-            "source_file_path": None,
-            "delta_table_version": None,
-            "delta_operation": None,
-            "delta_operation_metrics": None,
-            "job_id": None,
-            "job_run_id": None,
-            "task_key": None,
-            "notebook_path": None,
-            "cluster_id": None,
-            "error_code": None,
-            "error_message": None,
-            "error_stacktrace": None,
-            "created_timestamp": self.started_at,
-            "updated_timestamp": self.started_at,
-        }]
-        self.spark.createDataFrame(row).write.format("delta").mode("append").saveAsTable(self.audit_table)
-        self.event("PIPELINE_START", "INFO", f"Started {self.pipeline_id}")
-        return self.audit_id
+def start(self, source_object: str, target_object: str, load_type: str) -> str:
+    self.started_at = utc_now()
+
+    self.spark.sql(f"""
+        INSERT INTO {self.audit_table} (
+            audit_id,
+            workflow_audit_id,
+            batch_id,
+            pipeline_id,
+            pipeline_name,
+            pipeline_group,
+            source_object,
+            target_object,
+            load_type,
+            run_status,
+            start_timestamp,
+            end_timestamp,
+            duration_seconds,
+            rows_read,
+            rows_written,
+            rows_inserted,
+            rows_updated,
+            rows_deleted,
+            rows_rejected,
+            rows_duplicated,
+            rows_quarantined,
+            source_watermark,
+            target_watermark,
+            source_file_name,
+            source_file_path,
+            delta_table_version,
+            delta_operation,
+            delta_operation_metrics,
+            job_id,
+            job_run_id,
+            task_key,
+            notebook_path,
+            cluster_id,
+            error_code,
+            error_message,
+            error_stacktrace,
+            created_timestamp,
+            updated_timestamp
+        )
+        VALUES (
+            {q(self.audit_id)},
+            {q(self.workflow_audit_id)},
+            {q(self.batch_id)},
+            {q(self.pipeline_id)},
+            {q(self.pipeline_name)},
+            {q(self.pipeline_group)},
+            {q(source_object)},
+            {q(target_object)},
+            {q(load_type)},
+            'RUNNING',
+            {q(self.started_at)},
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            {q(self.started_at)},
+            {q(self.started_at)}
+        )
+    """)
+
+    self.event("PIPELINE_START", "INFO", f"Started {self.pipeline_id}")
+    return self.audit_id
 
     def complete(self, metrics: dict[str, Any] | None = None, source_watermark: str | None = None, target_watermark: str | None = None) -> None:
         metrics = metrics or {}
@@ -130,19 +173,32 @@ class PipelineAuditManager:
 
     def event(self, event_type: str, level: str, message: str) -> None:
         try:
-            row = [{
-                "event_id": str(uuid4()),
-                "audit_id": self.audit_id,
-                "workflow_audit_id": self.workflow_audit_id,
-                "batch_id": self.batch_id,
-                "pipeline_id": self.pipeline_id,
-                "event_type": event_type,
-                "event_level": level,
-                "event_message": message,
-                "event_payload": None,
-                "event_timestamp": utc_now(),
-            }]
-            self.spark.createDataFrame(row).write.format("delta").mode("append").saveAsTable(self.event_table)
+            self.spark.sql(f"""
+                INSERT INTO {self.event_table} (
+                    event_id,
+                    audit_id,
+                    workflow_audit_id,
+                    batch_id,
+                    pipeline_id,
+                    event_type,
+                    event_level,
+                    event_message,
+                    event_payload,
+                    event_timestamp
+                )
+                VALUES (
+                    {q(str(uuid4()))},
+                    {q(self.audit_id)},
+                    {q(self.workflow_audit_id)},
+                    {q(self.batch_id)},
+                    {q(self.pipeline_id)},
+                    {q(event_type)},
+                    {q(level)},
+                    {q(message)},
+                    NULL,
+                    {q(utc_now())}
+                )
+            """)
         except Exception:
             pass
 
