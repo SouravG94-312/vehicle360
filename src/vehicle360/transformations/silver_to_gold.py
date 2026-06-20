@@ -14,27 +14,38 @@ def _audit_cols(df: DataFrame) -> DataFrame:
 
 
 def build_dim_date(spark: SparkSession, start_date: str = "2025-01-01", end_date: str = "2026-12-31") -> DataFrame:
+    from datetime import date, timedelta
+
     dates = []
     current = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
+
     while current <= end:
         dates.append((current,))
         current += timedelta(days=1)
 
-    df = spark.createDataFrame(dates, ["calendar_date"])
+    df = spark.createDataFrame(dates, ["full_date"])
+
     df = (
-        df.withColumn("date_key", F.date_format(F.col("calendar_date"), "yyyyMMdd").cast("int"))
-          .withColumn("day_of_month", F.dayofmonth("calendar_date"))
-          .withColumn("month_number", F.month("calendar_date"))
-          .withColumn("month_name", F.date_format("calendar_date", "MMMM"))
-          .withColumn("quarter_number", F.quarter("calendar_date"))
-          .withColumn("year_number", F.year("calendar_date"))
-          .withColumn("week_of_year", F.weekofyear("calendar_date"))
-          .withColumn("day_of_week", F.dayofweek("calendar_date"))
-          .withColumn("day_name", F.date_format("calendar_date", "EEEE"))
-          .withColumn("is_weekend", F.col("day_of_week").isin([1, 7]))
+        df
+        .withColumn("date_key", F.date_format(F.col("full_date"), "yyyyMMdd").cast("int"))
+        .withColumn("calendar_date", F.col("full_date"))  # harmless extra column; dropped if target does not need it
+        .withColumn("day_of_month", F.dayofmonth("full_date"))
+        .withColumn("day_number", F.dayofmonth("full_date"))
+        .withColumn("day_name", F.date_format("full_date", "EEEE"))
+        .withColumn("day_of_week", F.dayofweek("full_date"))
+        .withColumn("week_of_year", F.weekofyear("full_date"))
+        .withColumn("month_number", F.month("full_date"))
+        .withColumn("month_name", F.date_format("full_date", "MMMM"))
+        .withColumn("quarter_number", F.quarter("full_date"))
+        .withColumn("quarter_name", F.concat(F.lit("Q"), F.quarter("full_date")))
+        .withColumn("year_number", F.year("full_date"))
+        .withColumn("is_weekend", F.col("day_of_week").isin([1, 7]))
+        .withColumn("created_timestamp", F.current_timestamp())
+        .withColumn("updated_timestamp", F.current_timestamp())
     )
-    return _audit_cols(df)
+
+    return df
 
 
 def build_dim_vehicle_model(df: DataFrame) -> DataFrame:
