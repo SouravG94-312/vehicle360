@@ -10,7 +10,9 @@ def latest_delta_metrics(spark: SparkSession, table_name: str) -> dict[str, Any]
         row = spark.sql(f"DESCRIBE HISTORY {table_name}").orderBy(F.col("version").desc()).first()
         if row is None:
             return {}
+
         metrics = row["operationMetrics"] or {}
+
         return {
             "version": row["version"],
             "operation": row["operation"],
@@ -21,37 +23,73 @@ def latest_delta_metrics(spark: SparkSession, table_name: str) -> dict[str, Any]
             "rows_deleted": int(metrics.get("numTargetRowsDeleted", 0) or 0),
             "rows_written": int(metrics.get("numOutputRows", metrics.get("numTargetRowsInserted", 0)) or 0),
         }
+
     except Exception:
         return {}
 
 
-def merge_scd1(
-    spark: SparkSession,
-    source_df: DataFrame,
-    target_table: str,
-    key_columns: Iterable[str],
-    update_condition: str | None = None,
-) -> dict[str, Any]:
+def merge_scd1(spark: SparkSession, source_df: DataFrame, target_table: str, key_columns: Iterable[str], update_condition: str | None = None,
+    exclude_update_columns: Iterable[str] | None = None, ) -> dict[str, Any]:
+
     keys = [c for c in key_columns if c]
+    exclude_update_columns = set(exclude_update_columns or [])
+
     if not keys:
         raise ValueError(f"MERGE requires key columns for target {target_table}")
 
     for k in keys:
         if k not in source_df.columns:
-            raise ValueError(f"MERGE key {k} missing in source dataframe for target {target_table}")
+            raise ValueError(
+                f"MERGE key {k} missing in source dataframe for target {target_table}. "
+                f"Available columns: {source_df.columns}"
+            )
 
-    target = DeltaTable.forName(spark, target_table)
+    target_columns = [f.name for f in spark.table(target_table).schema.fields]
+    source_columns = source_df.columns
+
+    merge_columns = [
+        c for c in target_columns
+        if c in source_columns and c not in exclude_update_columns
+    ]
+
+    update_columns = [
+        c for c in merge_columns
+        if c not in keys
+    ]
+
+    update_set = {
+        c: f"source.{c}"
+        for c in update_columns
+    }
+
+    insert_set = {
+        c: f"source.{c}"
+        for c in merge_columns
+    }
+
     condition = " AND ".join([f"target.{k} <=> source.{k}" for k in keys])
 
-    builder = target.alias("target").merge(source_df.alias("source"), condition)
-    if update_condition:
-        builder = builder.whenMatchedUpdateAll(condition=update_condition)
-    else:
-        builder = builder.whenMatchedUpdateAll()
+    target = DeltaTable.forName(spark, target_table)
 
-    builder.whenNotMatchedInsertAll().execute()
+    builder = target.alias("target").merge(
+        source_df.alias("source"),
+        condition
+    )
+
+    if update_set:
+        if update_condition:
+            builder = builder.whenMatchedUpdate(
+                condition=update_condition,
+                set=update_set
+            )
+        else:
+            builder = builder.whenMatchedUpdate(set=update_set)
+
+    builder = builder.whenNotMatchedInsert(values=insert_set)
+
+    builder.execute()
+
     return latest_delta_metrics(spark, target_table)
-
 
 def overwrite_table(df: DataFrame, target_table: str) -> dict[str, Any]:
     rows = df.count()

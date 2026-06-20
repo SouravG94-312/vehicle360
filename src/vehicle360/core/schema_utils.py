@@ -4,6 +4,7 @@ from typing import Iterable
 from pyspark.sql import DataFrame, SparkSession, functions as F
 
 
+
 def table_columns(spark: SparkSession, table_name: str) -> list[str]:
     return [f.name for f in spark.table(table_name).schema.fields]
 
@@ -22,22 +23,56 @@ def first_existing_col(df: DataFrame, candidates: Iterable[str], default=None):
             return F.col(c)
     return F.lit(default)
 
+def get_identity_columns(spark: SparkSession, table_name: str) -> list[str]:
+    """
+    Detect identity columns from SHOW CREATE TABLE output.
+    Works for Databricks Delta tables where identity columns appear as:
+    column_name BIGINT GENERATED ALWAYS AS IDENTITY
+    """
+    try:
+        rows = spark.sql(f"SHOW CREATE TABLE {table_name}").collect()
+        ddl = "\n".join([str(r[0]) for r in rows])
+        identity_cols = []
 
-def align_to_target_schema(spark: SparkSession, df: DataFrame, target_table: str) -> DataFrame:
+        for line in ddl.splitlines():
+            clean = line.strip().replace("`", "")
+            if "GENERATED" in clean.upper() and "IDENTITY" in clean.upper():
+                col_name = clean.split()[0].replace(",", "")
+                identity_cols.append(col_name)
+
+        return identity_cols
+
+    except Exception:
+        return []
+
+def align_to_target_schema(spark: SparkSession, df: DataFrame, target_table: str, exclude_columns: Iterable[str] | None = None
+) -> DataFrame:
     """
-    Make source dataframe safe for Delta MERGE/INSERT into an existing table:
-    - add missing target columns as NULL cast to target type
-    - drop extra source columns
-    - keep target column order
+    Align dataframe to the existing target table schema.
+
+    Important:
+    - Identity columns must be excluded from source dataframe.
+    - Databricks generates identity values automatically.
     """
+    exclude_columns = set(exclude_columns or [])
+
     target_schema = spark.table(target_table).schema
     out = df
+
+    selected_columns = []
+
     for field in target_schema.fields:
+        if field.name in exclude_columns:
+            continue
+
         if field.name not in out.columns:
             out = out.withColumn(field.name, F.lit(None).cast(field.dataType))
         else:
             out = out.withColumn(field.name, F.col(field.name).cast(field.dataType))
-    return out.select([F.col(f.name) for f in target_schema.fields])
+
+        selected_columns.append(field.name)
+
+    return out.select([F.col(c) for c in selected_columns])
 
 
 def require_columns(df: DataFrame, columns: Iterable[str], context: str) -> None:
