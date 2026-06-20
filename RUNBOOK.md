@@ -22,6 +22,39 @@ SELECT pipeline_group, execution_order, pipeline_id, source_object, target_objec
 FROM vehicle360.control.pipeline_config
 WHERE pipeline_id LIKE 'PL_SILVER_%' OR pipeline_id LIKE 'PL_GOLD_%'
 ORDER BY pipeline_group, execution_order;
+
+```
+
+```text
+
+
+
+pipeline_group	execution_order	pipeline_id	                        source_object	    target_object
+    SILVER	        10	        PL_SILVER_VEHICLE_MODEL	            vehicle_model	    vehicle_model
+    SILVER	        20	        PL_SILVER_DEALER	                dealer	            dealer
+    SILVER	        30	        PL_SILVER_CUSTOMER	                customer	        customer
+    SILVER	        40	        PL_SILVER_VEHICLE	                vehicle	            vehicle
+    SILVER	        50	        PL_SILVER_PART	                    part_master	        part
+    SILVER	        60	        PL_SILVER_FAILURE_CODE	            failure_code	    failure_code
+    SILVER	        70	        PL_SILVER_SERVICE_ORDER	            service_order	    service_order
+    SILVER	        80	        PL_SILVER_REPAIR_JOB	            repair_job	        repair_job
+    SILVER	        90	        PL_SILVER_PART_CONSUMPTION	        part_consumption	part_consumption
+    SILVER	        100	        PL_SILVER_WARRANTY_CLAIM	        warranty_claim	    warranty_claim
+    SILVER	        110	        PL_SILVER_VEHICLE_USAGE	            vehicle_daily_usage	vehicle_daily_usage
+    SILVER	        120	        PL_SILVER_BREAKDOWN	                breakdown	        breakdown
+    GOLD	        10	        PL_GOLD_DIM_DATE	                vehicle_daily_usage	dim_date
+    GOLD	        20	        PL_GOLD_DIM_VEHICLE_MODEL	        vehicle_model	    dim_vehicle_model
+    GOLD	        30	        PL_GOLD_DIM_CUSTOMER	            customer	        dim_customer
+    GOLD	        40	        PL_GOLD_DIM_DEALER	                dealer	            dim_dealer
+    GOLD	        50	        PL_GOLD_DIM_PART	                part	            dim_part
+    GOLD	        60	        PL_GOLD_DIM_FAILURE_CODE	        failure_code	    dim_failure_code
+    GOLD	        70	        PL_GOLD_DIM_VEHICLE	                vehicle	            dim_vehicle
+    GOLD	        100	        PL_GOLD_FACT_SERVICE_ORDER	        service_order	    fact_service_order
+    GOLD	        110	        PL_GOLD_FACT_REPAIR_JOB	            repair_job	        fact_repair_job
+    GOLD	        120	        PL_GOLD_FACT_PART_CONSUMPTION	    part_consumption	fact_part_consumption
+    GOLD	        130	        PL_GOLD_FACT_WARRANTY_CLAIM	        warranty_claim	    fact_warranty_claim
+    GOLD	        140	        PL_GOLD_FACT_VEHICLE_DAILY_USAGE	vehicle_daily_usage	fact_vehicle_daily_usage
+    GOLD	        150	        PL_GOLD_FACT_BREAKDOWN	            breakdown	        fact_breakdown
 ```
 
 ## 2. Test imports
