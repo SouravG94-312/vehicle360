@@ -1,0 +1,8 @@
+{
+  "catalog": "vehicle360",
+  "bronze_schema": "bronze",
+  "silver_schema": "silver",
+  "gold_schema": "gold",
+  "control_schema": "control",
+  "project_name": "Vehicle360 Medallion Framework"
+}
